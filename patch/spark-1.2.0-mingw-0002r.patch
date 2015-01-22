@@ -1,0 +1,478 @@
+diff -uN -r spark-1.2.0/bin/compute-classpath.sh spark-1.2.0-mingw/bin/compute-classpath.sh
+--- spark-1.2.0/bin/compute-classpath.sh	Wed Dec 10 19:02:03 2014
++++ spark-1.2.0-mingw/bin/compute-classpath.sh	Thu Jan 22 20:51:05 2015
+@@ -86,7 +86,9 @@
+ 
+ # Verify that versions of java used to build the jars and run Spark are compatible
+ jar_error_check=$("$JAR_CMD" -tf "$ASSEMBLY_JAR" nonexistent/class/path 2>&1)
+-if [[ "$jar_error_check" =~ "invalid CEN header" ]]; then
++#if [[ "$jar_error_check" =~ "invalid CEN header" ]]; then
++echo "$jar_error_check" | grep -q  "invalid CEN header"
++if [ $? -eq 0 ]; then
+   echo "Loading Spark jar with '$JAR_CMD' failed. " 1>&2
+   echo "This is likely because Spark was compiled with Java 7 and run " 1>&2
+   echo "with Java 6. (see SPARK-1703). Please use Java 7 to run Spark " 1>&2
+diff -uN -r spark-1.2.0/bin/pathfix spark-1.2.0-mingw/bin/pathfix
+--- spark-1.2.0/bin/pathfix	Thu Jan  1 09:00:00 1970
++++ spark-1.2.0-mingw/bin/pathfix	Thu Jan 22 20:57:36 2015
+@@ -0,0 +1,5 @@
++
++pathfix() {
++  pf=`echo $1|sed -e 's/^[cC]:/\/c\//;s/:[cC]:/:\/c\//g;s/:/;/g;s/\/[cC]\//c:\\\\/g;s/\//\\\\/g;s/\\\\\\\\/\\\\/g'`
++  echo $pf
++}
+diff -uN -r spark-1.2.0/bin/spark-class spark-1.2.0-mingw/bin/spark-class
+--- spark-1.2.0/bin/spark-class	Wed Dec 10 19:02:03 2014
++++ spark-1.2.0-mingw/bin/spark-class	Thu Jan 22 20:51:05 2015
+@@ -22,6 +22,7 @@
+ cygwin=false
+ case "`uname`" in
+     CYGWIN*) cygwin=true;;
++    MINGW*) cygwin=true;;
+ esac
+ 
+ # Figure out where Spark is installed
+@@ -31,6 +32,7 @@
+ export SPARK_HOME="$FWDIR"
+ 
+ . "$FWDIR"/bin/load-spark-env.sh
++. "$FWDIR"/bin/pathfix
+ 
+ if [ -z "$1" ]; then
+   echo "Usage: spark-class <class> [<args>]" 1>&2
+@@ -145,7 +147,9 @@
+   CLASSPATH="$classpath_output"
+ fi
+ 
+-if [[ "$1" =~ org.apache.spark.tools.* ]]; then
++#if [[ "$1" =~ org.apache.spark.tools.* ]]; then
++echo "$1" | grep -q "org.apache.spark.tools.*"
++if [ $? -eq 0 ]; then
+   if test -z "$SPARK_TOOLS_JAR"; then
+     echo "Failed to find Spark Tools Jar in $FWDIR/tools/target/scala-$SPARK_SCALA_VERSION/" 1>&2
+     echo "You need to build Spark before running $1." 1>&2
+@@ -155,9 +159,11 @@
+ fi
+ 
+ if $cygwin; then
+-  CLASSPATH="`cygpath -wp "$CLASSPATH"`"
++  #CLASSPATH="`cygpath -wp "$CLASSPATH"`"
++  CLASSPATH="`pathfix "$CLASSPATH"`"
+   if [ "$1" == "org.apache.spark.tools.JavaAPICompletenessChecker" ]; then
+-    export SPARK_TOOLS_JAR="`cygpath -w "$SPARK_TOOLS_JAR"`"
++    #export SPARK_TOOLS_JAR="`cygpath -w "$SPARK_TOOLS_JAR"`"
++    export SPARK_TOOLS_JAR="`pathfix "$SPARK_TOOLS_JAR"`"
+   fi
+ fi
+ export CLASSPATH
+diff -uN -r spark-1.2.0/bin/spark-shell spark-1.2.0-mingw/bin/spark-shell
+--- spark-1.2.0/bin/spark-shell	Wed Dec 10 19:02:03 2014
++++ spark-1.2.0-mingw/bin/spark-shell	Thu Jan 22 20:51:05 2015
+@@ -21,8 +21,10 @@
+ # Shell script for starting the Spark Shell REPL
+ 
+ cygwin=false
++mingw=false
+ case "`uname`" in
+   CYGWIN*) cygwin=true;;
++  MINGW*) cygwin=true; mingw=true;;
+ esac
+ 
+ # Enter posix mode for bash
+@@ -31,6 +33,8 @@
+ ## Global script variables
+ FWDIR="$(cd "`dirname "$0"`"/..; pwd)"
+ 
++. "$FWDIR"/bin/pathfix
++
+ function usage() {
+   echo "Usage: ./bin/spark-shell [options]"
+   "$FWDIR"/bin/spark-submit --help 2>&1 | grep -v Usage 1>&2
+@@ -46,7 +50,7 @@
+ gatherSparkSubmitOpts "$@"
+ 
+ function main() {
+-  if $cygwin; then
++  if [ $cygwin -a ! $mingw ]; then
+     # Workaround for issue involving JLine and Cygwin
+     # (see http://sourceforge.net/p/jline/bugs/40/).
+     # If you're using the Mintty terminal emulator in Cygwin, may need to set the
+diff -uN -r spark-1.2.0/bin/spark-submit spark-1.2.0-mingw/bin/spark-submit
+--- spark-1.2.0/bin/spark-submit	Wed Dec 10 19:02:03 2014
++++ spark-1.2.0-mingw/bin/spark-submit	Thu Jan 22 20:51:05 2015
+@@ -23,7 +23,8 @@
+ ORIG_ARGS=("$@")
+ 
+ # Set COLUMNS for progress bar
+-export COLUMNS=`tput cols`
++# export COLUMNS=`tput cols`
++export COLUMNS=`mode.com con:|awk '{if (NR==5) print $2}'`
+ 
+ while (($#)); do
+   if [ "$1" = "--deploy-mode" ]; then
+diff -uN -r spark-1.2.0/conf/hive-site.xml.example spark-1.2.0-mingw/conf/hive-site.xml.example
+--- spark-1.2.0/conf/hive-site.xml.example	Thu Jan  1 09:00:00 1970
++++ spark-1.2.0-mingw/conf/hive-site.xml.example	Thu Jan 22 21:17:07 2015
+@@ -0,0 +1,61 @@
++<?xml version="1.0"?>
++<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
++<!--
++   Licensed to the Apache Software Foundation (ASF) under one or more
++   contributor license agreements.  See the NOTICE file distributed with
++   this work for additional information regarding copyright ownership.
++   The ASF licenses this file to You under the Apache License, Version 2.0
++   (the "License"); you may not use this file except in compliance with
++   the License.  You may obtain a copy of the License at
++
++       http://www.apache.org/licenses/LICENSE-2.0
++
++   Unless required by applicable law or agreed to in writing, software
++   distributed under the License is distributed on an "AS IS" BASIS,
++   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++   See the License for the specific language governing permissions and
++   limitations under the License.
++-->
++
++<configuration>
++
++<!-- Specify your hive site configurations -->
++
++<!--
++  <property>
++    <name>hive.home.dir</name>
++    <value>c:/apache/hive-0.12.0</value>
++  </property>
++-->
++
++<!--
++  <property>
++    <name>hive.metastore.warehouse.dir</name>
++    <value>/user/hive/warehouse</value>
++    <!--
++      for local mode on MinGW, specify "/" + full Windows path.
++      <value>/${hive.home.dir}/data/user/hive/warehouse</value>
++    -->
++  </property>
++-->
++<--
++  <property>
++    <name>javax.jdo.option.ConnectionURL</name>
++    <value>jdbc:derby:;databaseName=${hive.home.dir}/data/metastore_db;create=true</value>
++  </property>
++-->
++
++<!--
++  <property>
++    <name>hadoop.bin.path</name>
++    <value>${hadoop.home.dir}/bin/hadoop.cmd</value>
++  </property>
++-->
++<!--
++  <property>
++    <name>hive.hwi.war.file</name>
++    <value>lib/hive-hwi-0.12.0.war</value>
++  </property>
++-->
++
++</configuration>
+diff -uN -r spark-1.2.0/conf/spark-env.sh.example spark-1.2.0-mingw/conf/spark-env.sh.example
+--- spark-1.2.0/conf/spark-env.sh.example	Thu Jan  1 09:00:00 1970
++++ spark-1.2.0-mingw/conf/spark-env.sh.example	Thu Jan 22 21:12:43 2015
+@@ -0,0 +1,57 @@
++#!/usr/bin/env bash
++
++# This file is sourced when running various Spark programs.
++# Copy it as spark-env.sh and edit that to configure Spark for your site.
++
++export HADOOP_HOME=`cd $SPARK_HOME/../hadoop-0.23.11; pwd`
++export HADOOP_CONF_DIR=${HADOOP_CONF_DIR:-"$HADOOP_HOME/etc/hadoop"}
++
++export HIVE_HOME=`cd $SPARK_HOME/../hive-0.12.0; pwd`
++export HIVE_CONF_DIR=$SPARK_HOME/conf
++
++
++# Options read when launching programs locally with 
++# ./bin/run-example or ./bin/spark-submit
++# - HADOOP_CONF_DIR, to point Spark towards Hadoop configuration files
++# - SPARK_LOCAL_IP, to set the IP address Spark binds to on this node
++# - SPARK_PUBLIC_DNS, to set the public dns name of the driver program
++# - SPARK_CLASSPATH, default classpath entries to append
++
++# Options read by executors and drivers running inside the cluster
++# - SPARK_LOCAL_IP, to set the IP address Spark binds to on this node
++# - SPARK_PUBLIC_DNS, to set the public DNS name of the driver program
++# - SPARK_CLASSPATH, default classpath entries to append
++# - SPARK_LOCAL_DIRS, storage directories to use on this node for shuffle and RDD data
++# - MESOS_NATIVE_LIBRARY, to point to your libmesos.so if you use Mesos
++
++# Options read in YARN client mode
++# - HADOOP_CONF_DIR, to point Spark towards Hadoop configuration files
++# - SPARK_EXECUTOR_INSTANCES, Number of workers to start (Default: 2)
++# - SPARK_EXECUTOR_CORES, Number of cores for the workers (Default: 1).
++# - SPARK_EXECUTOR_MEMORY, Memory per Worker (e.g. 1000M, 2G) (Default: 1G)
++# - SPARK_DRIVER_MEMORY, Memory for Master (e.g. 1000M, 2G) (Default: 512 Mb)
++# - SPARK_YARN_APP_NAME, The name of your application (Default: Spark)
++# - SPARK_YARN_QUEUE, The hadoop queue to use for allocation requests (Default: ‘default’)
++# - SPARK_YARN_DIST_FILES, Comma separated list of files to be distributed with the job.
++# - SPARK_YARN_DIST_ARCHIVES, Comma separated list of archives to be distributed with the job.
++
++# Options for the daemons used in the standalone deploy mode
++# - SPARK_MASTER_IP, to bind the master to a different IP address or hostname
++# - SPARK_MASTER_PORT / SPARK_MASTER_WEBUI_PORT, to use non-default ports for the master
++# - SPARK_MASTER_OPTS, to set config properties only for the master (e.g. "-Dx=y")
++# - SPARK_WORKER_CORES, to set the number of cores to use on this machine
++# - SPARK_WORKER_MEMORY, to set how much total memory workers have to give executors (e.g. 1000m, 2g)
++# - SPARK_WORKER_PORT / SPARK_WORKER_WEBUI_PORT, to use non-default ports for the worker
++# - SPARK_WORKER_INSTANCES, to set the number of worker processes per node
++# - SPARK_WORKER_DIR, to set the working directory of worker processes
++# - SPARK_WORKER_OPTS, to set config properties only for the worker (e.g. "-Dx=y")
++# - SPARK_HISTORY_OPTS, to set config properties only for the history server (e.g. "-Dx=y")
++# - SPARK_DAEMON_JAVA_OPTS, to set config properties for all daemons (e.g. "-Dx=y")
++# - SPARK_PUBLIC_DNS, to set the public dns name of the master or workers
++
++# Generic options for the daemons used in the standalone deploy mode
++# - SPARK_CONF_DIR      Alternate conf dir. (Default: ${SPARK_HOME}/conf)
++# - SPARK_LOG_DIR       Where log files are stored.  (Default: ${SPARK_HOME}/logs)
++# - SPARK_PID_DIR       Where the pid file is stored. (Default: /tmp)
++# - SPARK_IDENT_STRING  A string representing this instance of spark. (Default: $USER)
++# - SPARK_NICENESS      The scheduling priority for daemons. (Default: 0)
+diff -uN -r spark-1.2.0/make-tgz.sh spark-1.2.0-mingw/make-tgz.sh
+--- spark-1.2.0/make-tgz.sh	Thu Jan  1 09:00:00 1970
++++ spark-1.2.0-mingw/make-tgz.sh	Thu Jan 22 21:33:51 2015
+@@ -0,0 +1,236 @@
++#!/usr/bin/env bash
++
++set -o pipefail
++set -e
++
++# Figure out where the Spark framework is installed
++FWDIR="$(cd "`dirname "$0"`"; pwd)"
++DISTDIR="$FWDIR/dist"
++
++SKIP_JAVA_TEST=true
++SPARK_TACHYON=false
++MAKE_TGZ=true
++NAME=none
++
++function exit_with_usage {
++  echo "make-tgz.sh - tool for making tgz binary distributions of Spark"
++  echo ""
++  echo "usage:"
++  echo "./make-tgz.sh [--name NAME] [--with-tachyon]"
++  #echo "See Spark's \"Building Spark\" doc for correct Maven options."
++  echo "Befor run this, build Spark with Maven."
++  echo "ex)"
++  echo "export MAVEN_OPTS=\"-Xmx2g -XX:MaxPermSize=512M -XX:ReservedCodeCacheSize=512m\""
++  echo "mvn package -DskipTests -Phadoop-0.23 -Dhadoop.version=0.23.11 \\"
++  echo "  -Pyarn-alpha -Phive -Phive-0.12.0 -Phive-thriftserver"
++  echo ""
++  exit 1
++}
++
++# Parse arguments
++while (( "$#" )); do
++  case $1 in
++#    --hadoop)
++#      echo "Error: '--hadoop' is no longer supported:"
++#      echo "Error: use Maven profiles and options -Dhadoop.version and -Dyarn.version instead."
++#      echo "Error: Related profiles include hadoop-0.23, hdaoop-2.2, hadoop-2.3 and hadoop-2.4."
++#      exit_with_usage
++#      ;;
++#    --with-yarn)
++#      echo "Error: '--with-yarn' is no longer supported, use Maven option -Pyarn"
++#      exit_with_usage
++#      ;;
++#    --with-hive)
++#      echo "Error: '--with-hive' is no longer supported, use Maven options -Phive and -Phive-thriftserver"
++#      exit_with_usage
++#      ;;
++#    --java-test)
++#      SKIP_JAVA_TEST=false
++#      ;;
++    --with-tachyon)
++      SPARK_TACHYON=true
++      ;;
++    --tgz)
++      MAKE_TGZ=true
++      ;;
++    --name)
++      NAME="$2"
++      shift
++      ;;
++    --help)
++      exit_with_usage
++      ;;
++    *)
++      break
++      ;;
++  esac
++  shift
++done
++
++if [ -z "$JAVA_HOME" ]; then
++  # Fall back on JAVA_HOME from rpm, if found
++  if which rpm &>/dev/null; then
++    RPM_JAVA_HOME=$(rpm -E %java_home 2>/dev/null)
++    if [ "$RPM_JAVA_HOME" != "%java_home" ]; then
++      JAVA_HOME=$RPM_JAVA_HOME
++      echo "No JAVA_HOME set, proceeding with '$JAVA_HOME' learned from rpm"
++    fi
++  fi
++fi
++
++if [ -z "$JAVA_HOME" ]; then
++  echo "Error: JAVA_HOME is not set, cannot proceed."
++  exit -1
++fi
++
++if which git &>/dev/null; then
++    GITREV=$(git rev-parse --short HEAD 2>/dev/null || :)
++    if [ ! -z $GITREV ]; then
++	 GITREVSTRING=" (git revision $GITREV)"
++    fi
++    unset GITREV
++fi
++
++if ! which mvn &>/dev/null; then
++    echo -e "You need Maven installed to build Spark."
++    echo -e "Download Maven from https://maven.apache.org/"
++    exit -1;
++fi
++
++ls assembly/target/scala*/*.jar 2>&1 >/dev/null
++if [ $? -ne 0 ]; then
++  echo "No assembly found. Build Spark with Maven first."
++  exit 1
++fi
++
++versions=$(ls assembly/target/scala*/*.jar|cut -d "/" -f4|awk '{gsub("[a-z]"," ");gsub("-"," ");gsub("\. *$","");print $0}'|awk '{print $1,$2}')
++VERSION=$(echo $versions|awk '{print $1}')
++SPARK_HADOOP_VERSION=$(echo $versions|awk '{print $2}')
++
++SPARK_HIVE=1
++
++JAVA_CMD="$JAVA_HOME"/bin/java
++JAVA_VERSION=$("$JAVA_CMD" -version 2>&1)
++if [[ ! "$JAVA_VERSION" =~ "1.6" && -z "$SKIP_JAVA_TEST" ]]; then
++  echo "***NOTE***: JAVA_HOME is not set to a JDK 6 installation. The resulting"
++  echo "            distribution may not work well with PySpark and will not run"
++  echo "            with Java 6 (See SPARK-1703 and SPARK-1911)."
++  echo "            This test can be disabled by adding --skip-java-test."
++  echo "Output from 'java -version' was:"
++  echo "$JAVA_VERSION"
++  read -p "Would you like to continue anyways? [y,n]: " -r
++  if [[ ! $REPLY =~ ^[Yy]$ ]]; then
++    echo "Okay, exiting."
++    exit 1
++  fi
++fi
++
++if [ "$NAME" == "none" ]; then
++  NAME=$SPARK_HADOOP_VERSION
++fi
++
++echo "Spark version is $VERSION, Name = $NAME"
++
++if [ "$MAKE_TGZ" == "true" ]; then
++  echo "Making spark-$VERSION-bin-$NAME.tgz"
++else
++  echo "Making distribution for Spark $VERSION in $DISTDIR..."
++fi
++
++if [ "$SPARK_TACHYON" == "true" ]; then
++  echo "Tachyon Enabled"
++else
++  echo "Tachyon Disabled"
++fi
++
++# Build uber fat JAR
++cd "$FWDIR"
++
++export MAVEN_OPTS="-Xmx2g -XX:MaxPermSize=512M -XX:ReservedCodeCacheSize=512m"
++
++BUILD_COMMAND="mvn clean package -DskipTests $@"
++
++# Actually build the jar
++# echo -e "\nBuilding with..."
++# echo -e "\$ $BUILD_COMMAND\n"
++
++# ${BUILD_COMMAND}
++
++# Make directories
++rm -rf "$DISTDIR"
++mkdir -p "$DISTDIR/lib"
++echo "Spark $VERSION$GITREVSTRING built for Hadoop $SPARK_HADOOP_VERSION" > "$DISTDIR/RELEASE"
++
++# Copy jars
++cp "$FWDIR"/assembly/target/scala*/*assembly*hadoop*.jar "$DISTDIR/lib/"
++cp "$FWDIR"/examples/target/scala*/spark-examples*.jar "$DISTDIR/lib/"
++# This will fail if the -Pyarn profile is not provided
++# In this case, silence the error and ignore the return code of this command
++cp "$FWDIR"/network/yarn/target/scala*/spark-*-yarn-shuffle.jar "$DISTDIR/lib/" &> /dev/null || :
++
++# Copy example sources (needed for python and SQL)
++mkdir -p "$DISTDIR/examples/src/main"
++cp -r "$FWDIR"/examples/src/main "$DISTDIR/examples/src/"
++
++if [ "$SPARK_HIVE" == "1" ]; then
++  cp "$FWDIR"/lib_managed/jars/datanucleus*.jar "$DISTDIR/lib/"
++fi
++
++# Copy license and ASF files
++cp "$FWDIR/LICENSE" "$DISTDIR"
++cp "$FWDIR/NOTICE" "$DISTDIR"
++
++if [ -e "$FWDIR"/CHANGES.txt ]; then
++  cp "$FWDIR/CHANGES.txt" "$DISTDIR"
++fi
++
++# Copy data files
++cp -r "$FWDIR/data" "$DISTDIR"
++
++# Copy other things
++mkdir "$DISTDIR"/conf
++cp "$FWDIR"/conf/*.template "$DISTDIR"/conf
++cp "$FWDIR/README.md" "$DISTDIR"
++cp -r "$FWDIR/bin" "$DISTDIR"
++cp -r "$FWDIR/python" "$DISTDIR"
++cp -r "$FWDIR/sbin" "$DISTDIR"
++cp -r "$FWDIR/ec2" "$DISTDIR"
++
++# Download and copy in tachyon, if requested
++if [ "$SPARK_TACHYON" == "true" ]; then
++  TACHYON_VERSION="0.5.0"
++  TACHYON_URL="https://github.com/amplab/tachyon/releases/download/v${TACHYON_VERSION}/tachyon-${TACHYON_VERSION}-bin.tar.gz"
++
++  #TMPD=`mktemp -d 2>/dev/null || mktemp -d -t 'disttmp'`
++  TMPD=/tmp/`date|md5sum|cut -d ' ' -f1`
++  mkdir $TMPD
++
++  pushd $TMPD > /dev/null
++  echo "Fetching tachyon tgz"
++  curl $CURL_OPTS -LO "$TACHYON_URL"
++
++  tar xf "tachyon-${TACHYON_VERSION}-bin.tar.gz"
++  cp "tachyon-${TACHYON_VERSION}/core/target/tachyon-${TACHYON_VERSION}-jar-with-dependencies.jar" "$DISTDIR/lib"
++  mkdir -p "$DISTDIR/tachyon/src/main/java/tachyon/web"
++  cp -r "tachyon-${TACHYON_VERSION}"/{bin,conf,libexec} "$DISTDIR/tachyon"
++  cp -r "tachyon-${TACHYON_VERSION}"/core/src/main/java/tachyon/web "$DISTDIR/tachyon/src/main/java/tachyon/web"
++
++  if [[ `uname -a` == Darwin* ]]; then
++    # need to run sed differently on osx
++    nl=$'\n'; sed -i "" -e "s|export TACHYON_JAR=\$TACHYON_HOME/target/\(.*\)|# This is set for spark's make-distribution\\$nl  export TACHYON_JAR=\$TACHYON_HOME/../lib/\1|" "$DISTDIR/tachyon/libexec/tachyon-config.sh"
++  else
++    sed -i "s|export TACHYON_JAR=\$TACHYON_HOME/target/\(.*\)|# This is set for spark's make-distribution\n  export TACHYON_JAR=\$TACHYON_HOME/../lib/\1|" "$DISTDIR/tachyon/libexec/tachyon-config.sh"
++  fi
++
++  popd > /dev/null
++  rm -rf $TMPD
++fi
++
++if [ "$MAKE_TGZ" == "true" ]; then
++  TARDIR_NAME=spark-$VERSION-bin-$NAME
++  TARDIR="$FWDIR/$TARDIR_NAME"
++  rm -rf "$TARDIR"
++  cp -r "$DISTDIR" "$TARDIR"
++  tar czf "spark-$VERSION-bin-$NAME.tgz" -C "$FWDIR" "$TARDIR_NAME"
++  rm -rf "$TARDIR"
++fi

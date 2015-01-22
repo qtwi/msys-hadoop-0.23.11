@@ -1,0 +1,383 @@
+diff -uN -r src-orig/bin/ext/hiveserver.sh src/bin/ext/hiveserver.sh
+--- src-orig/bin/ext/hiveserver.sh	Thu Oct 10 10:30:36 2013
++++ src/bin/ext/hiveserver.sh	Thu Jan 22 14:20:20 2015
+@@ -20,7 +20,8 @@
+   echo "Starting Hive Thrift Server"
+   CLASS=org.apache.hadoop.hive.service.HiveServer
+   if $cygwin; then
+-    HIVE_LIB=`cygpath -w "$HIVE_LIB"`
++    #HIVE_LIB=`cygpath -w "$HIVE_LIB"`
++    HIVE_LIB=`pathfix "$HIVE_LIB"`
+   fi
+   JAR=${HIVE_LIB}/hive-service-*.jar
+ 
+diff -uN -r src-orig/bin/ext/hiveserver2.sh src/bin/ext/hiveserver2.sh
+--- src-orig/bin/ext/hiveserver2.sh	Thu Oct 10 10:30:36 2013
++++ src/bin/ext/hiveserver2.sh	Thu Jan 22 14:22:24 2015
+@@ -20,7 +20,8 @@
+   echo "Starting HiveServer2"
+   CLASS=org.apache.hive.service.server.HiveServer2
+   if $cygwin; then
+-    HIVE_LIB=`cygpath -w "$HIVE_LIB"`
++    #HIVE_LIB=`cygpath -w "$HIVE_LIB"`
++    HIVE_LIB=`pathfix "$HIVE_LIB"`
+   fi
+   JAR=${HIVE_LIB}/hive-service-*.jar
+ 
+diff -uN -r src-orig/bin/ext/hwi.sh src/bin/ext/hwi.sh
+--- src-orig/bin/ext/hwi.sh	Thu Oct 10 10:30:36 2013
++++ src/bin/ext/hwi.sh	Thu Jan 22 14:22:05 2015
+@@ -19,7 +19,8 @@
+ hwi() {
+ 
+   if $cygwin; then
+-    HIVE_LIB=`cygpath -w "$HIVE_LIB"`
++    #HIVE_LIB=`cygpath -w "$HIVE_LIB"`
++    HIVE_LIB=`pathfix "$HIVE_LIB"`
+   fi
+ 
+   CLASS=org.apache.hadoop.hive.hwi.HWIServer
+diff -uN -r src-orig/bin/ext/jar.sh src/bin/ext/jar.sh
+--- src-orig/bin/ext/jar.sh	Thu Oct 10 10:30:36 2013
++++ src/bin/ext/jar.sh	Thu Jan 22 14:21:45 2015
+@@ -24,7 +24,8 @@
+   shift
+ 
+   if $cygwin; then
+-    HIVE_LIB=`cygpath -w "$HIVE_LIB"`
++    #HIVE_LIB=`cygpath -w "$HIVE_LIB"`
++    HIVE_LIB=`pathfix "$HIVE_LIB"`
+   fi
+ 
+   if [ -z "$RUNJAR" ] ; then
+diff -uN -r src-orig/bin/ext/lineage.sh src/bin/ext/lineage.sh
+--- src-orig/bin/ext/lineage.sh	Thu Oct 10 10:30:36 2013
++++ src/bin/ext/lineage.sh	Thu Jan 22 14:21:20 2015
+@@ -26,7 +26,8 @@
+   fi
+ 
+   if $cygwin; then
+-    HIVE_LIB=`cygpath -w "$HIVE_LIB"`
++    #HIVE_LIB=`cygpath -w "$HIVE_LIB"`
++    HIVE_LIB=`pathfix "$HIVE_LIB"`
+   fi
+ 
+   exec $HADOOP jar ${HIVE_LIB}/hive-exec-*.jar $CLASS  "$@"
+diff -uN -r src-orig/bin/ext/metastore.sh src/bin/ext/metastore.sh
+--- src-orig/bin/ext/metastore.sh	Thu Oct 10 10:30:36 2013
++++ src/bin/ext/metastore.sh	Thu Jan 22 14:20:53 2015
+@@ -16,11 +16,14 @@
+ THISSERVICE=metastore
+ export SERVICE_LIST="${SERVICE_LIST}${THISSERVICE} "
+ 
++. "$bin"/pathfix
++
+ metastore() {
+   echo "Starting Hive Metastore Server"
+   CLASS=org.apache.hadoop.hive.metastore.HiveMetaStore
+   if $cygwin; then
+-    HIVE_LIB=`cygpath -w "$HIVE_LIB"`
++    #HIVE_LIB=`cygpath -w "$HIVE_LIB"`
++    HIVE_LIB=`pathfix "$HIVE_LIB"`
+   fi
+   JAR=${HIVE_LIB}/hive-service-*.jar
+ 
+diff -uN -r src-orig/bin/ext/util/execHiveCmd.sh src/bin/ext/util/execHiveCmd.sh
+--- src-orig/bin/ext/util/execHiveCmd.sh	Thu Oct 10 10:30:36 2013
++++ src/bin/ext/util/execHiveCmd.sh	Fri Jan 16 09:22:27 2015
+@@ -13,6 +13,8 @@
+ # See the License for the specific language governing permissions and
+ # limitations under the License.
+ 
++. "$bin"/pathfix
++
+ execHiveCmd () {
+   CLASS=$1;
+   shift;
+@@ -24,7 +26,8 @@
+   fi
+ 
+   if $cygwin; then
+-    HIVE_LIB=`cygpath -w "$HIVE_LIB"`
++    #HIVE_LIB=`cygpath -w "$HIVE_LIB"`
++    HIVE_LIB=`pathfix "$HIVE_LIB"`
+   fi
+ 
+   # hadoop 20 or newer - skip the aux_jars option. picked up from hiveconf
+diff -uN -r src-orig/bin/hive src/bin/hive
+--- src-orig/bin/hive	Thu Oct 10 10:30:36 2013
++++ src/bin/hive	Thu Jan 22 14:24:49 2015
+@@ -18,12 +18,14 @@
+ cygwin=false
+ case "`uname`" in
+    CYGWIN*) cygwin=true;;
++#  MINGW*) cygwin=true;;
+ esac
+ 
+ bin=`dirname "$0"`
+ bin=`cd "$bin"; pwd`
+ 
+ . "$bin"/hive-config.sh
++. "$bin"/pathfix
+ 
+ SERVICE=""
+ HELP=""
+@@ -100,7 +102,8 @@
+         continue;
+     fi
+     if $cygwin; then
+-	f=`cygpath -w "$f"`
++	#f=`cygpath -w "$f"`
++	f=`pathfix "$f"`
+     fi
+     AUX_CLASSPATH=${AUX_CLASSPATH}:$f
+     if [ "${AUX_PARAM}" == "" ]; then
+@@ -112,7 +115,8 @@
+ elif [ "${HIVE_AUX_JARS_PATH}" != "" ]; then 
+   HIVE_AUX_JARS_PATH=`echo $HIVE_AUX_JARS_PATH | sed 's/,/:/g'`
+   if $cygwin; then
+-      HIVE_AUX_JARS_PATH=`cygpath -p -w "$HIVE_AUX_JARS_PATH"`
++      #HIVE_AUX_JARS_PATH=`cygpath -p -w "$HIVE_AUX_JARS_PATH"`
++      HIVE_AUX_JARS_PATH=`pathfix "$HIVE_AUX_JARS_PATH"`
+       HIVE_AUX_JARS_PATH=`echo $HIVE_AUX_JARS_PATH | sed 's/;/,/g'`
+   fi
+   AUX_CLASSPATH=${HIVE_AUX_JARS_PATH}
+@@ -125,7 +129,8 @@
+       continue;
+   fi
+   if $cygwin; then
+-      f=`cygpath -w "$f"`
++      #f=`cygpath -w "$f"`
++      f=`pathfix "$f"`
+   fi
+   AUX_CLASSPATH=${AUX_CLASSPATH}:$f
+   if [ "${AUX_PARAM}" == "" ]; then
+@@ -135,7 +140,8 @@
+   fi
+ done
+ if $cygwin; then
+-    CLASSPATH=`cygpath -p -w "$CLASSPATH"`
++    #CLASSPATH=`cygpath -p -w "$CLASSPATH"`
++    CLASSPATH=`pathfix "$CLASSPATH"`
+     CLASSPATH=${CLASSPATH};${AUX_CLASSPATH}
+ else
+     CLASSPATH=${CLASSPATH}:${AUX_CLASSPATH}
+@@ -167,17 +173,21 @@
+ 
+ # Make sure we're using a compatible version of Hadoop
+ if [ "x$HADOOP_VERSION" == "x" ]; then
+-    HADOOP_VERSION=$($HADOOP version | awk '{if (NR == 1) {print $2;}}');
++    HADOOP_VERSION=$($HADOOP version | awk '{if ($1 == "Hadoop") {print $2;}}');
+ fi
+ 
+ # Save the regex to a var to workaround quoting incompatabilities
+ # between Bash 3.1 and 3.2
+ hadoop_version_re="^([[:digit:]]+)\.([[:digit:]]+)(\.([[:digit:]]+))?.*$"
+ 
+-if [[ "$HADOOP_VERSION" =~ $hadoop_version_re ]]; then
+-    hadoop_major_ver=${BASH_REMATCH[1]}
+-    hadoop_minor_ver=${BASH_REMATCH[2]}
+-    hadoop_patch_ver=${BASH_REMATCH[4]}
++###if [[ "$HADOOP_VERSION" =~ $hadoop_version_re ]]; then
++### hadoop_major,minor,patch_ver=${BASH_REMATCH[1]}, 2, 4
++
++echo "$HADOOP_VERSION" | grep -E "$hadoop_version_re" > /dev/null
++if [[ $? = 0 ]]; then
++    hadoop_major_ver=$(echo $HADOOP_VERSION|awk -F . '{print $1}')
++    hadoop_minor_ver=$(echo $HADOOP_VERSION|awk -F . '{print $2}')
++    hadoop_patch_ver=$(echo $HADOOP_VERSION|awk -F . '{print $3}')
+ else
+     echo "Unable to determine Hadoop version information."
+     echo "'hadoop version' returned:"
+diff -uN -r src-orig/bin/pathfix src/bin/pathfix
+--- src-orig/bin/pathfix	Thu Jan  1 09:00:00 1970
++++ src/bin/pathfix	Thu Jan 22 14:25:13 2015
+@@ -0,0 +1,5 @@
++
++pathfix() {
++  pf=`echo $1|sed -e 's/^[cC]:/\/c\//;s/:[cC]:/:\/c\//g;s/:/;/g;s/\/[cC]\//c:\\\\/g;s/\//\\\\/g;s/\\\\\\\\/\\\\/g'`
++  echo $pf
++}
+diff -uN -r src-orig/build.properties src/build.properties
+--- src-orig/build.properties	Thu Oct 10 10:30:39 2013
++++ src/build.properties	Fri Jan 16 09:19:39 2015
+@@ -29,13 +29,13 @@
+ 
+ hadoop-0.20.version=0.20.2
+ hadoop-0.20S.version=1.1.2
+-hadoop-0.23.version=2.0.5-alpha
+-hadoop.version=${hadoop-0.20.version}
+-hadoop.security.version=${hadoop-0.20S.version}
++hadoop-0.23.version=0.23.11
++hadoop.version=${hadoop-0.23.version}
++hadoop.security.version=${hadoop-0.23.version}
+ # Used to determine which set of Hadoop artifacts we depend on.
+ # - 20: hadoop-core, hadoop-test
+ # - 23: hadoop-common, hadoop-mapreduce-*, etc
+-hadoop.mr.rev=20S
++hadoop.mr.rev=23
+ 
+ build.dir.hive=${hive.root}/build
+ build.dir.hadoop=${build.dir.hive}/hadoopcore
+diff -uN -r src-orig/build.xml src/build.xml
+--- src-orig/build.xml	Thu Oct 10 10:30:39 2013
++++ src/build.xml	Fri Jan 16 10:08:28 2015
+@@ -453,6 +453,7 @@
+     <copy file="${hive.root}/bin/beeline" todir="${target.bin.dir}"/>
+     <copy file="${hive.root}/bin/hiveserver2" todir="${target.bin.dir}"/>
+     <copy file="${hive.root}/bin/hive-config.sh" todir="${target.bin.dir}"/>
++    <copy file="${hive.root}/bin/pathfix" todir="${target.bin.dir}"/>
+     <copy todir="${target.bin.dir}/ext">
+       <fileset dir="${hive.root}/bin/ext" excludes="${vcs.excludes}"/>
+     </copy>
+diff -uN -r src-orig/common/src/gen/org/apache/hive/common/package-info.java src/common/src/gen/org/apache/hive/common/package-info.java
+--- src-orig/common/src/gen/org/apache/hive/common/package-info.java	Thu Oct 10 10:47:01 2013
++++ src/common/src/gen/org/apache/hive/common/package-info.java	Fri Jan 16 10:21:23 2015
+@@ -1,7 +1,7 @@
+ /*
+  * Generated by saveVersion.sh
+  */
+-@HiveVersionAnnotation(version="0.12.0", revision="1530839", branch="branches/branch-0.12",
+-                         user="hortonth", date="Thu Oct 10 01:47:00 UTC 2013", url="https://svn.apache.org/repos/asf/hive/branches/branch-0.12",
+-                         srcChecksum="78577075b27c7d68dbeb52b40f4561b9")
++@HiveVersionAnnotation(version="0.12.0", revision="Unknown", branch="Unknown",
++                         user="jpUSER000911120", date="Fri Jan 16 10:21:22 2015", url="file:///c/apps/hive-0.12.0-src/src",
++                         srcChecksum="88f3dc17f75ffda6176faa649593b54e")
+ package org.apache.hive.common;
+diff -uN -r src-orig/conf/hive-env.sh.template src/conf/hive-env.sh.template
+--- src-orig/conf/hive-env.sh.template	Thu Oct 10 10:30:35 2013
++++ src/conf/hive-env.sh.template	Fri Jan 16 09:28:53 2015
+@@ -22,6 +22,8 @@
+ # The hive service being invoked (CLI/HWI etc.) is available via the environment
+ # variable SERVICE
+ 
++#export JAVA_HOME=/c/Progra~1/Java/jdk1.7.0_71
++
+ 
+ # Hive Client memory usage can be an issue if a large number of clients
+ # are running at the same time. The flags below have been useful in 
+@@ -45,10 +47,16 @@
+ 
+ 
+ # Set HADOOP_HOME to point to a specific hadoop install directory
+-# HADOOP_HOME=${bin}/../../hadoop
++# hadoop_version=0.23.11
++# HADOOP_HOME=`cd ${bin}/../../hadoop-${hadoop_version};pwd`
+ 
+ # Hive Configuration Directory can be controlled by:
+-# export HIVE_CONF_DIR=
++# export HIVE_HOME=`cd ${bin}/..;pwd`
++# export HIVE_CONF_DIR=$HIVE_HOME/conf
++
++# Specify Hive Metadata Log Directory and Hive Home Drirectory as an optional
++# export DERBY_LOG=$HIVE_HOME/logs/derby.log
++# export HADOOP_OPTS="$HADOOP_OPTS -Dderby.stream.error.file=$DERBY_LOG -Dhive.home.dir=$HIVE_HOME"
+ 
+ # Folder containing extra ibraries required for hive compilation/execution can be controlled by:
+ # export HIVE_AUX_JARS_PATH=
+diff -uN -r src-orig/conf/hive-site.xml src/conf/hive-site.xml
+--- src-orig/conf/hive-site.xml	Thu Oct 10 10:30:35 2013
++++ src/conf/hive-site.xml	Thu Jan  1 09:00:00 1970
+@@ -1,22 +0,0 @@
+-<?xml version="1.0"?>
+-<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+-<!--
+-   Licensed to the Apache Software Foundation (ASF) under one or more
+-   contributor license agreements.  See the NOTICE file distributed with
+-   this work for additional information regarding copyright ownership.
+-   The ASF licenses this file to You under the Apache License, Version 2.0
+-   (the "License"); you may not use this file except in compliance with
+-   the License.  You may obtain a copy of the License at
+-
+-       http://www.apache.org/licenses/LICENSE-2.0
+-
+-   Unless required by applicable law or agreed to in writing, software
+-   distributed under the License is distributed on an "AS IS" BASIS,
+-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+-   See the License for the specific language governing permissions and
+-   limitations under the License.
+--->
+-
+-<configuration>
+-
+-</configuration>
+diff -uN -r src-orig/conf/hive-site.xml.template src/conf/hive-site.xml.template
+--- src-orig/conf/hive-site.xml.template	Thu Jan  1 09:00:00 1970
++++ src/conf/hive-site.xml.template	Fri Jan 16 09:33:25 2015
+@@ -0,0 +1,49 @@
++<?xml version="1.0"?>
++<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
++<!--
++   Licensed to the Apache Software Foundation (ASF) under one or more
++   contributor license agreements.  See the NOTICE file distributed with
++   this work for additional information regarding copyright ownership.
++   The ASF licenses this file to You under the Apache License, Version 2.0
++   (the "License"); you may not use this file except in compliance with
++   the License.  You may obtain a copy of the License at
++
++       http://www.apache.org/licenses/LICENSE-2.0
++
++   Unless required by applicable law or agreed to in writing, software
++   distributed under the License is distributed on an "AS IS" BASIS,
++   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++   See the License for the specific language governing permissions and
++   limitations under the License.
++-->
++
++<configuration>
++
++<!-- Specify your hive site configurations -->
++
++<!--
++  <property>
++    <name>hive.metastore.warehouse.dir</name>
++    <value>${hive.home.dir}/data/user/hive/warehouse</value>
++  </property>
++
++  <property>
++    <name>javax.jdo.option.ConnectionURL</name>
++    <value>jdbc:derby:;databaseName=${hive.home.dir}/data/metastore_db;create=true</value>
++  </property>
++-->
++
++<!--
++  <property>
++    <name>hadoop.bin.path</name>
++    <value>${hadoop.home.dir}/bin/hadoop.cmd</value>
++  </property>
++-->
++<!--
++  <property>
++    <name>hive.hwi.war.file</name>
++    <value>lib/hive-hwi-0.12.0.war</value>
++  </property>
++-->
++
++</configuration>
+diff -uN -r src-orig/shims/src/0.23/java/org/apache/hadoop/mapred/WebHCatJTShim23.java src/shims/src/0.23/java/org/apache/hadoop/mapred/WebHCatJTShim23.java
+--- src-orig/shims/src/0.23/java/org/apache/hadoop/mapred/WebHCatJTShim23.java	Thu Oct 10 10:30:35 2013
++++ src/shims/src/0.23/java/org/apache/hadoop/mapred/WebHCatJTShim23.java	Thu Jan 15 10:01:41 2015
+@@ -43,7 +43,7 @@
+   public JobProfile getJobProfile(JobID jobid)
+           throws IOException {
+     RunningJob rj = jc.getJob(jobid);
+-    JobStatus jobStatus = rj.getJobStatus();
++    JobStatus jobStatus = getJobStatus(jobid); // rj.getJobStatus();
+     JobProfile jobProfile = new JobProfile(jobStatus.getUsername(), jobStatus.getJobID(),
+             jobStatus.getJobFile(), jobStatus.getTrackingUrl(), jobStatus.getJobName());
+     return jobProfile;
+@@ -57,7 +57,13 @@
+   public JobStatus getJobStatus(JobID jobid)
+           throws IOException {
+     RunningJob rj = jc.getJob(jobid);
+-    JobStatus jobStatus = rj.getJobStatus();
++    //JobStatus jobStatus = rj.getJobStatus();
++    JobStatus[] jobStatuses = jc.getAllJobs();
++    JobStatus jobStatus = null;
++    for (int i = 0; i < jobStatuses.length; ++i) {
++      if (jobStatuses[i].getJobID() == rj.getID()) jobStatus = jobStatuses[i];
++    }
++    if (jobStatus == null) throw new IOException("Running Job not found.");
+     return jobStatus;
+   }
+ 

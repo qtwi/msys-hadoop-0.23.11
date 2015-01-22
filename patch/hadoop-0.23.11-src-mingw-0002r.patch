@@ -1,0 +1,527 @@
+diff -uN -r hadoop-0.23.11-src/hadoop-assemblies/src/main/resources/assemblies/hadoop-dist.xml hadoop-0.23.11-src-mingw/hadoop-assemblies/src/main/resources/assemblies/hadoop-dist.xml
+--- hadoop-0.23.11-src/hadoop-assemblies/src/main/resources/assemblies/hadoop-dist.xml	Thu Jun 19 06:47:28 2014
++++ hadoop-0.23.11-src-mingw/hadoop-assemblies/src/main/resources/assemblies/hadoop-dist.xml	Thu Jan 22 18:18:55 2015
+@@ -26,6 +26,7 @@
+       <outputDirectory>/bin</outputDirectory>
+       <excludes>
+         <exclude>*.sh</exclude>
++        <exclude>*-config.cmd</exclude>
+       </excludes>
+       <fileMode>0755</fileMode>
+     </fileSet>
+@@ -38,6 +39,7 @@
+       <outputDirectory>/libexec</outputDirectory>
+       <includes>
+         <include>*-config.sh</include>
++        <include>*-config.cmd</include>
+       </includes>
+       <fileMode>0755</fileMode>
+     </fileSet>
+diff -uN -r hadoop-0.23.11-src/hadoop-common-project/hadoop-common/dev-support/saveVersion.sh hadoop-0.23.11-src-mingw/hadoop-common-project/hadoop-common/dev-support/saveVersion.sh
+--- hadoop-0.23.11-src/hadoop-common-project/hadoop-common/dev-support/saveVersion.sh	Thu Jun 19 06:47:38 2014
++++ hadoop-0.23.11-src-mingw/hadoop-common-project/hadoop-common/dev-support/saveVersion.sh	Thu Jan 22 18:19:51 2015
+@@ -46,7 +46,9 @@
+ 
+ which md5sum > /dev/null
+ if [ "$?" = "0" ] ; then
+-  srcChecksum=`find src/main/java -name '*.java' | LC_ALL=C sort | xargs md5sum | md5sum | cut -d ' ' -f 1`
++  msys_path=`cd /;pwd -W 2>/dev/null`
++  msys_path=${msys_path:-"/usr"}
++  srcChecksum=`"$msys_path/bin/find" src/main/java -name '*.java' | LC_ALL=C "$msys_path/bin/sort" | xargs md5sum | md5sum | cut -d ' ' -f 1`
+ else
+   srcChecksum="Not Available"
+ fi
+diff -uN -r hadoop-0.23.11-src/hadoop-common-project/hadoop-common/pom.xml hadoop-0.23.11-src-mingw/hadoop-common-project/hadoop-common/pom.xml
+--- hadoop-0.23.11-src/hadoop-common-project/hadoop-common/pom.xml	Thu Jun 19 10:16:26 2014
++++ hadoop-0.23.11-src-mingw/hadoop-common-project/hadoop-common/pom.xml	Thu Jan 22 18:18:55 2015
+@@ -378,7 +378,7 @@
+                 <mkdir dir="${project.build.directory}/generated-sources/java"/>
+                 <exec executable="sh">
+                   <arg
+-                      line="${basedir}/dev-support/saveVersion.sh ${project.version} ${project.build.directory}/generated-sources/java"/>
++                      line="-x ${basedir}/dev-support/saveVersion.sh ${project.version} ${project.build.directory}/generated-sources/java"/>
+                 </exec>
+               </target>
+             </configuration>
+diff -uN -r hadoop-0.23.11-src/hadoop-common-project/hadoop-common/src/main/bin/hadoop hadoop-0.23.11-src-mingw/hadoop-common-project/hadoop-common/src/main/bin/hadoop
+--- hadoop-0.23.11-src/hadoop-common-project/hadoop-common/src/main/bin/hadoop	Thu Jun 19 06:47:36 2014
++++ hadoop-0.23.11-src-mingw/hadoop-common-project/hadoop-common/src/main/bin/hadoop	Thu Jan 22 18:18:55 2015
+@@ -47,6 +47,8 @@
+   exit
+ fi
+ 
++. $HADOOP_PREFIX/bin/pathfix
++
+ COMMAND=$1
+ case $COMMAND in
+   #hdfs commands
+@@ -85,7 +87,8 @@
+ 
+   classpath)
+     if $cygwin; then
+-      CLASSPATH=`cygpath -p -w "$CLASSPATH"`
++      #CLASSPATH=`cygpath -p -w "$CLASSPATH"`
++      CLASSPATH=`pathfix"$CLASSPATH"`
+     fi
+     echo $CLASSPATH
+     exit
+@@ -124,7 +127,8 @@
+     HADOOP_OPTS="$HADOOP_OPTS -Dhadoop.security.logger=${HADOOP_SECURITY_LOGGER:-INFO,NullAppender}"
+ 
+     if $cygwin; then
+-      CLASSPATH=`cygpath -p -w "$CLASSPATH"`
++      #CLASSPATH=`cygpath -p -w "$CLASSPATH"`
++      CLASSPATH=`pathfix "$CLASSPATH"`
+     fi
+     export CLASSPATH=$CLASSPATH
+     exec "$JAVA" $JAVA_HEAP_MAX $HADOOP_OPTS $CLASS "$@"
+diff -uN -r hadoop-0.23.11-src/hadoop-common-project/hadoop-common/src/main/bin/hadoop-config.sh hadoop-0.23.11-src-mingw/hadoop-common-project/hadoop-common/src/main/bin/hadoop-config.sh
+--- hadoop-0.23.11-src/hadoop-common-project/hadoop-common/src/main/bin/hadoop-config.sh	Thu Jun 19 06:47:36 2014
++++ hadoop-0.23.11-src-mingw/hadoop-common-project/hadoop-common/src/main/bin/hadoop-config.sh	Thu Jan 22 18:18:55 2015
+@@ -115,12 +115,15 @@
+ cygwin=false
+ case "`uname`" in
+ CYGWIN*) cygwin=true;;
++MINGW*) cygwin=true;;
+ esac
+ 
+ if [ -f "${HADOOP_CONF_DIR}/hadoop-env.sh" ]; then
+   . "${HADOOP_CONF_DIR}/hadoop-env.sh"
+ fi
+ 
++. $HADOOP_PREFIX/bin/pathfix
++
+ # check if net.ipv6.bindv6only is set to 1
+ bindv6only=$(/sbin/sysctl -n net.ipv6.bindv6only 2> /dev/null)
+ if [ -n "$bindv6only" ] && [ "$bindv6only" -eq "1" ] && [ "$HADOOP_ALLOW_IPV6" != "yes" ]
+@@ -214,9 +217,12 @@
+ 
+ # cygwin path translation
+ if $cygwin; then
+-  HADOOP_PREFIX=`cygpath -w "$HADOOP_PREFIX"`
+-  HADOOP_LOG_DIR=`cygpath -w "$HADOOP_LOG_DIR"`
+-  JAVA_LIBRARY_PATH=`cygpath -w "$JAVA_LIBRARY_PATH"`
++#  HADOOP_PREFIX=`cygpath -w "$HADOOP_PREFIX"`
++#  HADOOP_LOG_DIR=`cygpath -w "$HADOOP_LOG_DIR"`
++#  JAVA_LIBRARY_PATH=`cygpath -w "$JAVA_LIBRARY_PATH"`
++  HADOOP_PREFIX=`pathfix "$HADOOP_PREFIX"`
++  HADOOP_LOG_DIR=`pathfix "$HADOOP_LOG_DIR"`
++  JAVA_LIBRARY_PATH=`pathfix "$JAVA_LIBRARY_PATH"`
+ fi
+ 
+ # setup 'java.library.path' for native-hadoop code if necessary
+@@ -237,7 +243,8 @@
+ 
+ # cygwin path translation
+ if $cygwin; then
+-  JAVA_LIBRARY_PATH=`cygpath -p "$JAVA_LIBRARY_PATH"`
++  #JAVA_LIBRARY_PATH=`cygpath -p "$JAVA_LIBRARY_PATH"`
++  JAVA_LIBRARY_PATH=`pathfix "$JAVA_LIBRARY_PATH"`
+ fi
+ 
+ HADOOP_OPTS="$HADOOP_OPTS -Dhadoop.log.dir=$HADOOP_LOG_DIR"
+@@ -308,12 +315,14 @@
+ 
+ # cygwin path translation
+ if $cygwin; then
+-  HADOOP_HDFS_HOME=`cygpath -w "$HADOOP_HDFS_HOME"`
++  #HADOOP_HDFS_HOME=`cygpath -w "$HADOOP_HDFS_HOME"`
++  HADOOP_HDFS_HOME=`pathfix "$HADOOP_HDFS_HOME"`
+ fi
+ 
+ # cygwin path translation
+ if $cygwin; then
+-  TOOL_PATH=`cygpath -p -w "$TOOL_PATH"`
++  #TOOL_PATH=`cygpath -p -w "$TOOL_PATH"`
++  TOOL_PATH=`pathfix "$TOOL_PATH"`
+ fi
+ 
+ 
+diff -uN -r hadoop-0.23.11-src/hadoop-common-project/hadoop-common/src/main/bin/hadoop.cmd hadoop-0.23.11-src-mingw/hadoop-common-project/hadoop-common/src/main/bin/hadoop.cmd
+--- hadoop-0.23.11-src/hadoop-common-project/hadoop-common/src/main/bin/hadoop.cmd	Thu Jan  1 09:00:00 1970
++++ hadoop-0.23.11-src-mingw/hadoop-common-project/hadoop-common/src/main/bin/hadoop.cmd	Thu Jan 22 18:18:55 2015
+@@ -0,0 +1,2 @@
++bash %~dp0/hadoop %*
++
+diff -uN -r hadoop-0.23.11-src/hadoop-common-project/hadoop-common/src/main/bin/pathfix hadoop-0.23.11-src-mingw/hadoop-common-project/hadoop-common/src/main/bin/pathfix
+--- hadoop-0.23.11-src/hadoop-common-project/hadoop-common/src/main/bin/pathfix	Thu Jan  1 09:00:00 1970
++++ hadoop-0.23.11-src-mingw/hadoop-common-project/hadoop-common/src/main/bin/pathfix	Thu Jan 22 18:18:55 2015
+@@ -0,0 +1,5 @@
++
++pathfix() {
++  pf=`echo $1|sed -e 's/^[cC]:/\/c\//;s/:[cC]:/:\/c\//g;s/:/;/g;s/\/[cC]\//c:\\\\/g;s/\//\\\\/g;s/\\\\\\\\/\\\\/g'`
++  echo $pf
++}
+diff -uN -r hadoop-0.23.11-src/hadoop-common-project/hadoop-common/src/main/bin/rcc hadoop-0.23.11-src-mingw/hadoop-common-project/hadoop-common/src/main/bin/rcc
+--- hadoop-0.23.11-src/hadoop-common-project/hadoop-common/src/main/bin/rcc	Thu Jun 19 06:47:36 2014
++++ hadoop-0.23.11-src-mingw/hadoop-common-project/hadoop-common/src/main/bin/rcc	Thu Jan 22 18:18:55 2015
+@@ -38,6 +38,8 @@
+   . "${HADOOP_CONF_DIR}/hadoop-env.sh"
+ fi
+ 
++. $HADOOP_PREFIX/bin/pathfix
++
+ # some Java parameters
+ if [ "$JAVA_HOME" != "" ]; then
+   #echo "run java in $JAVA_HOME"
+@@ -59,7 +61,8 @@
+ 
+ # cygwin path translation
+ if expr `uname` : 'CYGWIN*' > /dev/null; then
+-  CLASSPATH=`cygpath -p -w "$CLASSPATH"`
++  #CLASSPATH=`cygpath -p -w "$CLASSPATH"`
++  CLASSPATH=`pathfix "$CLASSPATH"`
+ fi
+ 
+ # run it
+diff -uN -r hadoop-0.23.11-src/hadoop-common-project/hadoop-common/src/main/java/org/apache/hadoop/fs/DF.java hadoop-0.23.11-src-mingw/hadoop-common-project/hadoop-common/src/main/java/org/apache/hadoop/fs/DF.java
+--- hadoop-0.23.11-src/hadoop-common-project/hadoop-common/src/main/java/org/apache/hadoop/fs/DF.java	Thu Jun 19 06:47:37 2014
++++ hadoop-0.23.11-src-mingw/hadoop-common-project/hadoop-common/src/main/java/org/apache/hadoop/fs/DF.java	Thu Jan 22 18:18:55 2015
+@@ -144,6 +144,11 @@
+ 
+   @Override
+   protected String[] getExecString() {
++    if (System.getProperty("os.name").indexOf("Windows") >= 0) {
++      //System.out.println("getExec: df -k " + dirPath);
++      return new String[] {"wmic","logicaldisk","where","deviceid=\"c:\"",
++                    "get","deviceid,size,freespace"};
++    }
+     // ignoring the error since the exit code it enough
+     return new String[] {"bash","-c","exec 'df' '-k' '" + dirPath 
+                          + "' 2>/dev/null"};
+@@ -152,10 +157,12 @@
+   @Override
+   protected void parseExecResult(BufferedReader lines) throws IOException {
+     lines.readLine();                         // skip headings
++    if (System.getProperty("os.name").indexOf("Windows") >= 0) 
++      lines.readLine();                       // skip blank line
+   
+     String line = lines.readLine();
+     if (line == null) {
+-      throw new IOException( "Expecting a line not the end of stream" );
++      throw new IOException( "Expecting a least line not the end of stream" );
+     }
+     StringTokenizer tokens =
+       new StringTokenizer(line, " \t\n\r\f%");
+@@ -180,6 +187,10 @@
+         break;
+ 
+       case OS_TYPE_WIN:
++        Long.parseLong(tokens.nextToken()); // available
++        Long.parseLong(tokens.nextToken()); // capacity
++        this.mount = "/c";
++        break;
+       case OS_TYPE_SOLARIS:
+       case OS_TYPE_MAC:
+       case OS_TYPE_UNIX:
+diff -uN -r hadoop-0.23.11-src/hadoop-common-project/hadoop-common/src/main/java/org/apache/hadoop/fs/FileSystem.java hadoop-0.23.11-src-mingw/hadoop-common-project/hadoop-common/src/main/java/org/apache/hadoop/fs/FileSystem.java
+--- hadoop-0.23.11-src/hadoop-common-project/hadoop-common/src/main/java/org/apache/hadoop/fs/FileSystem.java	Thu Jun 19 06:47:37 2014
++++ hadoop-0.23.11-src-mingw/hadoop-common-project/hadoop-common/src/main/java/org/apache/hadoop/fs/FileSystem.java	Thu Jan 22 18:18:55 2015
+@@ -2154,7 +2154,7 @@
+       ) throws IOException {
+     Class<?> clazz = conf.getClass("fs." + uri.getScheme() + ".impl", null);
+     if (clazz == null) {
+-      throw new IOException("No FileSystem for scheme: " + uri.getScheme());
++      throw new IOException("No FileSystem for scheme: " + uri.getScheme() + " of uri "+ uri.toString());
+     }
+     FileSystem fs = (FileSystem)ReflectionUtils.newInstance(clazz, conf);
+     fs.initialize(uri, conf);
+diff -uN -r hadoop-0.23.11-src/hadoop-common-project/hadoop-common/src/main/java/org/apache/hadoop/fs/FileUtil.java hadoop-0.23.11-src-mingw/hadoop-common-project/hadoop-common/src/main/java/org/apache/hadoop/fs/FileUtil.java
+--- hadoop-0.23.11-src/hadoop-common-project/hadoop-common/src/main/java/org/apache/hadoop/fs/FileUtil.java	Thu Jun 19 06:47:37 2014
++++ hadoop-0.23.11-src-mingw/hadoop-common-project/hadoop-common/src/main/java/org/apache/hadoop/fs/FileUtil.java	Thu Jan 22 18:18:55 2015
+@@ -473,7 +473,10 @@
+     String[] command;
+     String result;
+     CygPathCommand(String path) throws IOException {
+-      command = new String[]{"cygpath", "-u", path};
++      //command = new String[]{"cygpath", "-u", path};
++      command = new String[]{"perl", "-e",
++      "\"$_=$ARGV[0];s/\\\\\\\\/\\\\//g;s/[cC]:\\\\//\\\\/c\\\\//g;print\"",
++        path};
+       run();
+     }
+     String getResult() throws IOException {
+@@ -485,9 +488,10 @@
+     protected void parseExecResult(BufferedReader lines) throws IOException {
+       String line = lines.readLine();
+       if (line == null) {
+-        throw new IOException("Can't convert '" + command[2] + 
+-                              " to a cygwin path");
++        throw new IOException("Can't convert '" + command[3] + 
++                              " to a cygwin(msys) path");
+       }
++      LOG.debug("converted CygPath = " + line + " from " + command[3]);
+       result = line;
+     }
+   }
+diff -uN -r hadoop-0.23.11-src/hadoop-common-project/hadoop-common/src/main/java/org/apache/hadoop/fs/Path.java hadoop-0.23.11-src-mingw/hadoop-common-project/hadoop-common/src/main/java/org/apache/hadoop/fs/Path.java
+--- hadoop-0.23.11-src/hadoop-common-project/hadoop-common/src/main/java/org/apache/hadoop/fs/Path.java	Thu Jun 19 06:47:37 2014
++++ hadoop-0.23.11-src-mingw/hadoop-common-project/hadoop-common/src/main/java/org/apache/hadoop/fs/Path.java	Thu Jan 22 18:18:55 2015
+@@ -120,9 +120,16 @@
+       start = colon+1;
+     }
+ 
++    // MinGW hack
++    if ((scheme == null) && (pathString.startsWith("//", start) &&
++        (pathString.length()-start > 1))) {
++      int dsi = pathString.indexOf("//", start);
++      pathString = pathString.substring(dsi+1);
++    }
++
+     // parse uri authority, if any
+-    if (pathString.startsWith("//", start) &&
+-        (pathString.length()-start > 2)) {       // has authority
++    if ((scheme != null) && (pathString.startsWith("//", start) &&
++        (pathString.length()-start > 2))) {       // has authority
+       int nextSlash = pathString.indexOf('/', start+2);
+       int authEnd = nextSlash > 0 ? nextSlash : pathString.length();
+       authority = pathString.substring(start+2, authEnd);
+diff -uN -r hadoop-0.23.11-src/hadoop-common-project/hadoop-common/src/main/java/org/apache/hadoop/fs/shell/PathData.java hadoop-0.23.11-src-mingw/hadoop-common-project/hadoop-common/src/main/java/org/apache/hadoop/fs/shell/PathData.java
+--- hadoop-0.23.11-src/hadoop-common-project/hadoop-common/src/main/java/org/apache/hadoop/fs/shell/PathData.java	Thu Jun 19 06:47:37 2014
++++ hadoop-0.23.11-src-mingw/hadoop-common-project/hadoop-common/src/main/java/org/apache/hadoop/fs/shell/PathData.java	Thu Jan 22 18:18:55 2015
+@@ -266,6 +266,11 @@
+    */
+   public static PathData[] expandAsGlob(String pattern, Configuration conf)
+   throws IOException {
++    // MinGW rash hack
++    if (pattern.startsWith("//") &&
++        (pattern.indexOf("localhost:") < 0)) {
++      pattern = pattern.substring(1);
++    }
+     Path globPath = new Path(pattern);
+     FileSystem fs = globPath.getFileSystem(conf);    
+     FileStatus[] stats = fs.globStatus(globPath);
+@@ -283,7 +288,10 @@
+       URI globUri = globPath.toUri();
+       if (globUri.getScheme() != null) {
+         globType = PathType.HAS_SCHEME;
+-      } else if (new File(globUri.getPath()).isAbsolute()) {
++      //} else if (new File(globUri.getPath()).isAbsolute()) {
++      } else if (!globUri.getPath().isEmpty() &&
++                 (new File(globUri.getPath()).isAbsolute() ||
++                 globUri.getPath().indexOf("/") == 0)) {
+         globType = PathType.SCHEMELESS_ABSOLUTE;
+       } else {
+         globType = PathType.RELATIVE;
+diff -uN -r hadoop-0.23.11-src/hadoop-dist/pom.xml hadoop-0.23.11-src-mingw/hadoop-dist/pom.xml
+--- hadoop-0.23.11-src/hadoop-dist/pom.xml	Thu Jun 19 10:16:25 2014
++++ hadoop-0.23.11-src-mingw/hadoop-dist/pom.xml	Thu Jan 22 18:18:55 2015
+@@ -107,7 +107,7 @@
+                         fi
+                       }
+ 
+-                      ROOT=`cd ${basedir}/..;pwd`
++                      ROOT=`cd $(pwd)/../..;pwd`
+                       echo
+                       echo "Current directory `pwd`"
+                       echo
+diff -uN -r hadoop-0.23.11-src/hadoop-hdfs-project/hadoop-hdfs/pom.xml hadoop-0.23.11-src-mingw/hadoop-hdfs-project/hadoop-hdfs/pom.xml
+--- hadoop-0.23.11-src/hadoop-hdfs-project/hadoop-hdfs/pom.xml	Thu Jun 19 10:16:26 2014
++++ hadoop-0.23.11-src-mingw/hadoop-hdfs-project/hadoop-hdfs/pom.xml	Thu Jan 22 18:18:55 2015
+@@ -232,13 +232,15 @@
+                 <echo file="target/compile-proto.sh">
+                     PROTO_DIR=src/main/proto
+                     JAVA_DIR=target/generated-sources/java
+-                    which cygpath 2&gt; /dev/null
+-                    if [ $? = 1 ]; then
++                    if [ $SYSTEMROOT != 'C:\Windows' ]; then
+                       IS_WIN=false
+                     else
+                       IS_WIN=true
+-                      WIN_PROTO_DIR=`cygpath --windows $PROTO_DIR`
+-                      WIN_JAVA_DIR=`cygpath --windows $JAVA_DIR`
++                       pathfix() {
++                         echo `echo $1|sed -e 's/^c:/\/c\//;s/:c:/:\/c\//g;s/:/;/g;s/\/c\//c:\\\\/g;s/\//\\\\/g'`
++                      }
++                      WIN_PROTO_DIR=`pathfix $PROTO_DIR`
++                      WIN_JAVA_DIR=`pathfix $JAVA_DIR`
+                     fi
+                     mkdir -p $JAVA_DIR 2&gt; /dev/null
+                     for PROTO_FILE in `ls $PROTO_DIR/*.proto 2&gt; /dev/null`
+@@ -251,7 +253,7 @@
+                     done
+                 </echo>
+                 <exec executable="sh" dir="${basedir}" failonerror="true">
+-                  <arg line="target/compile-proto.sh"/>
++                  <arg line="-x target/compile-proto.sh"/>
+                 </exec>
+               </target>
+             </configuration>
+diff -uN -r hadoop-0.23.11-src/hadoop-hdfs-project/hadoop-hdfs/src/main/bin/hdfs hadoop-0.23.11-src-mingw/hadoop-hdfs-project/hadoop-hdfs/src/main/bin/hdfs
+--- hadoop-0.23.11-src/hadoop-hdfs-project/hadoop-hdfs/src/main/bin/hdfs	Thu Jun 19 06:47:29 2014
++++ hadoop-0.23.11-src-mingw/hadoop-hdfs-project/hadoop-hdfs/src/main/bin/hdfs	Thu Jan 22 18:18:55 2015
+@@ -50,6 +50,8 @@
+   exit
+ fi
+ 
++. $HADOOP_PREFIX/bin/pathfix
++
+ COMMAND=$1
+ shift
+ 
+@@ -109,7 +111,8 @@
+ fi
+ 
+ if $cygwin; then
+-  CLASSPATH=`cygpath -p -w "$CLASSPATH"`
++  #CLASSPATH=`cygpath -p -w "$CLASSPATH"`
++  CLASSPATH=`pathfix "$CLASSPATH"`
+ fi
+ export CLASSPATH=$CLASSPATH
+ 
+diff -uN -r hadoop-0.23.11-src/hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/blockmanagement/DatanodeManager.java hadoop-0.23.11-src-mingw/hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/blockmanagement/DatanodeManager.java
+--- hadoop-0.23.11-src/hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/blockmanagement/DatanodeManager.java	Thu Jun 19 06:47:30 2014
++++ hadoop-0.23.11-src-mingw/hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/blockmanagement/DatanodeManager.java	Thu Jan 22 18:18:55 2015
+@@ -543,6 +543,10 @@
+     if (dnAddress != null) {
+       // Mostly called inside an RPC, update ip and peer hostname
+       String hostname = dnAddress.getHostName();
++      if (hostname.equals("127.0.0.1")) {
++        LOG.warn("datanode hostname was convert to localhost from 127.0.0.1");
++        hostname = "localhost";
++      }
+       String ip = dnAddress.getHostAddress();
+       if (hostname.equals(ip)) {
+         LOG.warn("Unresolved datanode registration from " + ip);
+diff -uN -r hadoop-0.23.11-src/hadoop-hdfs-project/hadoop-hdfs-httpfs/pom.xml hadoop-0.23.11-src-mingw/hadoop-hdfs-project/hadoop-hdfs-httpfs/pom.xml
+--- hadoop-0.23.11-src/hadoop-hdfs-project/hadoop-hdfs-httpfs/pom.xml	Thu Jun 19 10:16:25 2014
++++ hadoop-0.23.11-src-mingw/hadoop-hdfs-project/hadoop-hdfs-httpfs/pom.xml	Thu Jan 22 18:18:55 2015
+@@ -492,14 +492,15 @@
+                     <!-- Using Unix script to preserve file permissions -->
+                     <echo file="${project.build.directory}/tomcat-untar.sh">
+ 
+-                      which cygpath 2&gt; /dev/null
+-                      if [ $? = 1 ]; then
++                      if [ $SYSTEMROOT != 'C:\Windows' ]; then
+                       BUILD_DIR="${project.build.directory}"
+                       else
+-                      BUILD_DIR=`cygpath --unix '${project.build.directory}'`
++                      #BUILD_DIR=`pathfix '${project.build.directory}'`
++                      BUILD_DIR='${project.build.directory}'
+                       fi
+                       cd $BUILD_DIR/tomcat.exp
+-                      tar xzf ${basedir}/downloads/tomcat.tar.gz
++                      #tar xzf '${basedir}/downloads/tomcat.tar.gz'
++                      tar xzf ../../downloads/tomcat.tar.gz
+                     </echo>
+                     <exec executable="sh" dir="${project.build.directory}" failonerror="true">
+                       <arg line="./tomcat-untar.sh"/>
+diff -uN -r hadoop-0.23.11-src/hadoop-mapreduce-project/bin/mapred hadoop-0.23.11-src-mingw/hadoop-mapreduce-project/bin/mapred
+--- hadoop-0.23.11-src/hadoop-mapreduce-project/bin/mapred	Thu Jun 19 06:47:31 2014
++++ hadoop-0.23.11-src-mingw/hadoop-mapreduce-project/bin/mapred	Thu Jan 22 18:18:55 2015
+@@ -48,6 +48,8 @@
+   exit
+ fi
+ 
++. $HADOOP_PREFIX/bin/pathfix
++
+ COMMAND=$1
+ shift
+ 
+@@ -126,7 +128,8 @@
+ done
+ 
+ if $cygwin; then
+-  CLASSPATH=`cygpath -p -w "$CLASSPATH"`
++  #CLASSPATH=`cygpath -p -w "$CLASSPATH"`
++  CLASSPATH=`pathfix "$CLASSPATH"`
+ fi
+ 
+ if [ "$COMMAND" = "classpath" ] ; then
+diff -uN -r hadoop-0.23.11-src/hadoop-project/pom.xml hadoop-0.23.11-src-mingw/hadoop-project/pom.xml
+--- hadoop-0.23.11-src/hadoop-project/pom.xml	Thu Jun 19 10:16:24 2014
++++ hadoop-0.23.11-src-mingw/hadoop-project/pom.xml	Thu Jan 22 18:18:55 2015
+@@ -604,7 +604,7 @@
+       <dependency>
+         <groupId>com.google.protobuf</groupId>
+         <artifactId>protobuf-java</artifactId>
+-        <version>2.4.0a</version>
++        <version>2.5.0</version>
+       </dependency>
+       <dependency>
+         <groupId>commons-daemon</groupId>
+diff -uN -r hadoop-0.23.11-src/hadoop-yarn-project/hadoop-yarn/bin/yarn hadoop-0.23.11-src-mingw/hadoop-yarn-project/hadoop-yarn/bin/yarn
+--- hadoop-0.23.11-src/hadoop-yarn-project/hadoop-yarn/bin/yarn	Thu Jun 19 06:47:42 2014
++++ hadoop-0.23.11-src-mingw/hadoop-yarn-project/hadoop-yarn/bin/yarn	Thu Jan 22 18:18:55 2015
+@@ -79,6 +79,8 @@
+   exit 1
+ fi
+ 
++. $HADOOP_PREFIX/bin/pathfix
++
+ # get arguments
+ COMMAND=$1
+ shift
+@@ -166,7 +168,8 @@
+ # figure out which class to run
+ if [ "$COMMAND" = "classpath" ] ; then
+   if $cygwin; then
+-    CLASSPATH=`cygpath -p -w "$CLASSPATH"`
++    #CLASSPATH=`cygpath -p -w "$CLASSPATH"`
++    CLASSPATH=`pathfix "$CLASSPATH"`
+   fi
+   echo $CLASSPATH
+   exit
+@@ -221,15 +224,20 @@
+ 
+ # cygwin path translation
+ if $cygwin; then
+-  CLASSPATH=`cygpath -p -w "$CLASSPATH"`
+-  YARN_HOME=`cygpath -w "$YARN_HOME"`
+-  YARN_LOG_DIR=`cygpath -w "$YARN_LOG_DIR"`
+-  TOOL_PATH=`cygpath -p -w "$TOOL_PATH"`
++  #CLASSPATH=`cygpath -p -w "$CLASSPATH"`
++  #YARN_HOME=`cygpath -w "$YARN_HOME"`
++  #YARN_LOG_DIR=`cygpath -w "$YARN_LOG_DIR"`
++  #TOOL_PATH=`cygpath -p -w "$TOOL_PATH"`
++  CLASSPATH=`pathfix "$CLASSPATH"`
++  YARN_HOME=`pathfix "$YARN_HOME"`
++  YARN_LOG_DIR=`pathfix "$YARN_LOG_DIR"`
++  TOOL_PATH=`pathfix "$TOOL_PATH"`
+ fi
+ 
+ # cygwin path translation
+ if $cygwin; then
+-  JAVA_LIBRARY_PATH=`cygpath -p "$JAVA_LIBRARY_PATH"`
++  #JAVA_LIBRARY_PATH=`cygpath -p "$JAVA_LIBRARY_PATH"`
++  JAVA_LIBRARY_PATH=`pathfix "$JAVA_LIBRARY_PATH"`
+ fi
+ 
+ YARN_OPTS="$YARN_OPTS -Dhadoop.log.dir=$YARN_LOG_DIR"
+diff -uN -r hadoop-0.23.11-src/hadoop-yarn-project/hadoop-yarn/hadoop-yarn-common/pom.xml hadoop-0.23.11-src-mingw/hadoop-yarn-project/hadoop-yarn/hadoop-yarn-common/pom.xml
+--- hadoop-0.23.11-src/hadoop-yarn-project/hadoop-yarn/hadoop-yarn-common/pom.xml	Thu Jun 19 10:16:27 2014
++++ hadoop-0.23.11-src-mingw/hadoop-yarn-project/hadoop-yarn/hadoop-yarn-common/pom.xml	Thu Jan 22 18:18:55 2015
+@@ -41,6 +41,8 @@
+   <dependency>
+     <groupId>org.apache.hadoop</groupId>
+     <artifactId>hadoop-yarn-api</artifactId>
++    <scope>system</scope>
++    <systemPath>${basedir}/../hadoop-yarn-api/target/hadoop-yarn-api-${project.version}.jar</systemPath>
+   </dependency>
+   </dependencies>
+ 
+@@ -132,8 +134,9 @@
+             <id>generate-version</id>
+             <phase>generate-sources</phase>
+             <configuration>
+-              <executable>scripts/saveVersion.sh</executable>
++              <executable>sh</executable>
+               <arguments>
++                <argument>scripts/saveVersion.sh</argument>
+                 <argument>${project.version}</argument>
+                 <argument>${project.build.directory}</argument>
+               </arguments>
+diff -uN -r hadoop-0.23.11-src/hadoop-yarn-project/hadoop-yarn/hadoop-yarn-common/scripts/saveVersion.sh hadoop-0.23.11-src-mingw/hadoop-yarn-project/hadoop-yarn/hadoop-yarn-common/scripts/saveVersion.sh
+--- hadoop-0.23.11-src/hadoop-yarn-project/hadoop-yarn/hadoop-yarn-common/scripts/saveVersion.sh	Thu Jun 19 06:47:41 2014
++++ hadoop-0.23.11-src-mingw/hadoop-yarn-project/hadoop-yarn/hadoop-yarn-common/scripts/saveVersion.sh	Thu Jan 22 18:20:35 2015
+@@ -44,7 +44,9 @@
+   branch="Unknown"
+   url="file://$cwd"
+ fi
+-srcChecksum=`find ../ -name '*.java' | grep -v generated-sources | LC_ALL=C sort | xargs md5sum | md5sum | cut -d ' ' -f 1`
++msys_path=`cd /;pwd -W 2>/dev/null`
++msys_path=${msys_path:-"/usr"}
++srcChecksum=`"$msys_path/bin/find" ../ -name '*.java' | grep -v generated-sources | LC_ALL=C "$msys_path/bin/sort" | xargs md5sum | md5sum | cut -d ' ' -f 1`
+ 
+ mkdir -p $build_dir/generated-sources/version/org/apache/hadoop/yarn/
+ cat << EOF | \
